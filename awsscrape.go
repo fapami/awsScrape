@@ -31,7 +31,7 @@ type checkIPRangeParams struct {
 	verbose     bool
 }
 
-func parseCommandLineArguments() (string, string, string, int, int, bool, string, bool) {
+func parseCommandLineArguments() (string, string, string, string, int, int, bool, string, bool) {
 	region := flag.String("region", "", "AWS region(s)")
 	excludeRegions := flag.String("exclude-region", "", "Exclude AWS region(s)")
 	wordlist := flag.String("wordlist", "", "File containing keywords to search in SSL certificates")
@@ -49,11 +49,11 @@ func parseCommandLineArguments() (string, string, string, int, int, bool, string
 		*wordlist = *shortWordlist
 	}
 
-	return *region, *wordlist, *keyword, *numThreads, *timeout, *randomize, *outputFile, *verbose
+	return *region, *excludeRegions, *wordlist, *keyword, *numThreads, *timeout, *randomize, *outputFile, *verbose
 }
 
 func main() {
-	region, wordlist, keyword, numThreads, timeout, randomize, outputFile, verbose := parseCommandLineArguments()
+	region, excludeRegions, wordlist, keyword, numThreads, timeout, randomize, outputFile, verbose := parseCommandLineArguments()
 
 	if wordlist == "" && keyword == "" {
 		fmt.Println("Usage: go run script.go [-wordlist=<your_keywords_file> | -keyword=<your_keyword>] [-threads=<num_threads>] [-timeout=<timeout_seconds>] [-randomize] [-output=<output_file>] [-verbose]")
