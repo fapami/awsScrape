@@ -19,6 +19,8 @@ import (
 type IPRange struct {
 	Prefixes []struct {
 		IPPrefix string `json:"ip_prefix"`
+		Region   string `json:"region"`
+		Service  string `json:"service"`
 	} `json:"prefixes"`
 }
 
@@ -29,7 +31,8 @@ type checkIPRangeParams struct {
 	verbose     bool
 }
 
-func parseCommandLineArguments() (string, string, int, int, bool, string, bool) {
+func parseCommandLineArguments() (string, string, string, int, int, bool, string, bool) {
+	region := flag.String("region", "", "AWS region(s)")
 	wordlist := flag.String("wordlist", "", "File containing keywords to search in SSL certificates")
 	shortWordlist := flag.String("w", "", "File containing keywords to search in SSL certificates (short form)")
 	keyword := flag.String("keyword", "", "Single keyword to search in SSL certificates")
@@ -45,11 +48,11 @@ func parseCommandLineArguments() (string, string, int, int, bool, string, bool) 
 		*wordlist = *shortWordlist
 	}
 
-	return *wordlist, *keyword, *numThreads, *timeout, *randomize, *outputFile, *verbose
+	return *region, *wordlist, *keyword, *numThreads, *timeout, *randomize, *outputFile, *verbose
 }
 
 func main() {
-	wordlist, keyword, numThreads, timeout, randomize, outputFile, verbose := parseCommandLineArguments()
+	region, wordlist, keyword, numThreads, timeout, randomize, outputFile, verbose := parseCommandLineArguments()
 
 	if wordlist == "" && keyword == "" {
 		fmt.Println("Usage: go run script.go [-wordlist=<your_keywords_file> | -keyword=<your_keyword>] [-threads=<num_threads>] [-timeout=<timeout_seconds>] [-randomize] [-output=<output_file>] [-verbose]")
@@ -93,10 +96,12 @@ func main() {
 		return
 	}
 
+	selectedIPRanges := filterIPRanges(ipRanges, region)
+
 	if randomize {
 		rand.Seed(time.Now().UnixNano())
-		rand.Shuffle(len(ipRanges.Prefixes), func(i, j int) {
-			ipRanges.Prefixes[i], ipRanges.Prefixes[j] = ipRanges.Prefixes[j], ipRanges.Prefixes[i]
+		rand.Shuffle(len(selectedIPRanges), func(i, j int) {
+			selectedIPRanges[i], selectedIPRanges[j] = selectedIPRanges[j], selectedIPRanges[i]
 		})
 	}
 
@@ -116,9 +121,9 @@ func main() {
 	}
 
 	go func() {
-		for _, prefix := range ipRanges.Prefixes {
+		for _, prefix := range selectedIPRanges {
 			params := checkIPRangeParams{
-				ipRange:     prefix.IPPrefix,
+				ipRange:     prefix,
 				keywordList: keywordList,
 				timeout:     timeout,
 				verbose:     verbose,
@@ -152,6 +157,22 @@ func main() {
 			}
 		}
 	}
+}
+
+func filterIPRanges(ipRanges IPRange, region string) []string {
+	var selectedRanges []string
+
+	for _, ipRange := range ipRanges.Prefixes {
+		if ipRange.Service == "EC2" || ipRange.Service == "CLOUDFRONT" {
+			// First one is for e.g.: comma separated list or etc.
+			// Second one is for incomplete values like.: 'eu-west' (all eu-west regions)
+			if region == "" || strings.Contains(region, ipRange.Region) || strings.Contains(ipRange.Region, region) {
+				selectedRanges = append(selectedRanges, ipRange.IPPrefix)
+			}
+		}
+	}
+
+	return selectedRanges
 }
 
 func checkIPRange(params checkIPRangeParams, ipChan chan<- string) {
