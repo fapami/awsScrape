@@ -33,6 +33,7 @@ type checkIPRangeParams struct {
 
 func parseCommandLineArguments() (string, string, string, int, int, bool, string, bool) {
 	region := flag.String("region", "", "AWS region(s)")
+	excludeRegions := flag.String("exclude-region", "", "Exclude AWS region(s)")
 	wordlist := flag.String("wordlist", "", "File containing keywords to search in SSL certificates")
 	shortWordlist := flag.String("w", "", "File containing keywords to search in SSL certificates (short form)")
 	keyword := flag.String("keyword", "", "Single keyword to search in SSL certificates")
@@ -96,7 +97,7 @@ func main() {
 		return
 	}
 
-	selectedIPRanges := filterIPRanges(ipRanges, region)
+	selectedIPRanges := filterIPRanges(ipRanges, region, excludeRegions)
 
 	if randomize {
 		rand.Seed(time.Now().UnixNano())
@@ -159,7 +160,7 @@ func main() {
 	}
 }
 
-func filterIPRanges(ipRanges IPRange, region string) []string {
+func filterIPRanges(ipRanges IPRange, region string, excludeRegions string) []string {
 	var selectedRanges []string
 
 	for _, ipRange := range ipRanges.Prefixes {
@@ -167,7 +168,9 @@ func filterIPRanges(ipRanges IPRange, region string) []string {
 			// First one is for e.g.: comma separated list or etc.
 			// Second one is for incomplete values like.: 'eu-west' (all eu-west regions)
 			if region == "" || strings.Contains(region, ipRange.Region) || strings.Contains(ipRange.Region, region) {
-				selectedRanges = append(selectedRanges, ipRange.IPPrefix)
+				if excludeRegions == "" || (!strings.Contains(excludeRegions, ipRange.Region) && !strings.Contains(ipRange.Region, excludeRegions)) {
+					selectedRanges = append(selectedRanges, ipRange.IPPrefix)
+				}
 			}
 		}
 	}
