@@ -41,7 +41,7 @@ type checkIPRangeParams struct {
 
 func parseCommandLineArguments() (string, string, string, string, string, int, int, bool, string, bool) {
 	cloudProvider := flag.String("cloud-provider", "", "Cloud Provider to scan (aws, gcloud)")
-	shortCloudProvider := flag.String("w", "aws", "Cloud Provider to scan (aws, gcloud) (short form)")
+	shortCloudProvider := flag.String("c", "aws", "Cloud Provider to scan (aws, gcloud) (short form)")
 	region := flag.String("region", "", "Region(s)")
 	excludeRegions := flag.String("exclude-region", "", "Exclude region(s)")
 	wordlist := flag.String("wordlist", "", "File containing keywords to search in SSL certificates")
