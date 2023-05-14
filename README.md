@@ -1,7 +1,8 @@
 # cloudScrape
 
 AWSScrape is a tool designed to scrape SSL certificates from all AWS IP ranges, searching for specific keywords in the certificates' Common Name (CN), Organization (O), and Organizational Unit (OU) fields.
-cloudScrape: I have made my own version of the tool that can also scrape Google Cloud ranges and I may add other providers in the future. This project is for my own purposes only, if you would like to please support the original creator of the awsScrape: [https://github.com/jhaddix/awsScrape](https://github.com/jhaddix/awsScrape)
+
+cloudScrape: I have made my own version of the tool that can also scrape Google Cloud ranges and I may add other providers in the future. This project is for my own purposes only, if you would like to please support the original creator of awsScrape: [https://github.com/jhaddix/awsScrape](https://github.com/jhaddix/awsScrape)
 
 [![Twitter](https://img.shields.io/badge/twitter-@jhaddix-blue.svg)](https://twitter.com/jhaddix)
 
