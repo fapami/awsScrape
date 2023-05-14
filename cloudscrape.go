@@ -113,8 +113,9 @@ func main() {
 			return
 		}
 
-		selectedIPRanges = filterAWSIPRanges(ipRanges, region, excludeRegions)
+		selectedIPRanges = append(selectedIPRanges, filterAWSIPRanges(ipRanges, region, excludeRegions)...)
 	}
+
 	if strings.Contains(cloudProvider, "gcloud") {
 		resp, err := http.Get("https://www.gstatic.com/ipranges/cloud.json")
 		if err != nil {
@@ -136,7 +137,7 @@ func main() {
 			return
 		}
 
-		selectedIPRanges = filterGCloudIPRanges(ipRanges, region, excludeRegions)
+		selectedIPRanges = append(selectedIPRanges, filterGCloudIPRanges(ipRanges, region, excludeRegions)...)
 	}
 
 	if selectedIPRanges == nil {
