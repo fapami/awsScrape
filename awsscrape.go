@@ -24,6 +24,14 @@ type IPRange struct {
 	} `json:"prefixes"`
 }
 
+type GCloudIPRange struct {
+	Prefixes []struct {
+		IPPrefix string `json:"ipv4Prefix"`
+		Region   string `json:"scope"`
+		Service  string `json:"service"`
+	} `json:"prefixes"`
+}
+
 type checkIPRangeParams struct {
 	ipRange     string
 	keywordList []string
@@ -31,9 +39,11 @@ type checkIPRangeParams struct {
 	verbose     bool
 }
 
-func parseCommandLineArguments() (string, string, string, string, int, int, bool, string, bool) {
-	region := flag.String("region", "", "AWS region(s)")
-	excludeRegions := flag.String("exclude-region", "", "Exclude AWS region(s)")
+func parseCommandLineArguments() (string, string, string, string, string, int, int, bool, string, bool) {
+	cloudProvider := flag.String("cloud-provider", "", "Cloud Provider to scan (aws, gcloud)")
+	shortCloudProvider := flag.String("w", "aws", "Cloud Provider to scan (aws, gcloud) (short form)")
+	region := flag.String("region", "", "Region(s)")
+	excludeRegions := flag.String("exclude-region", "", "Exclude region(s)")
 	wordlist := flag.String("wordlist", "", "File containing keywords to search in SSL certificates")
 	shortWordlist := flag.String("w", "", "File containing keywords to search in SSL certificates (short form)")
 	keyword := flag.String("keyword", "", "Single keyword to search in SSL certificates")
@@ -49,11 +59,15 @@ func parseCommandLineArguments() (string, string, string, string, int, int, bool
 		*wordlist = *shortWordlist
 	}
 
-	return *region, *excludeRegions, *wordlist, *keyword, *numThreads, *timeout, *randomize, *outputFile, *verbose
+	if *cloudProvider == "" {
+		*cloudProvider = *shortCloudProvider
+	}
+
+	return *cloudProvider, *region, *excludeRegions, *wordlist, *keyword, *numThreads, *timeout, *randomize, *outputFile, *verbose
 }
 
 func main() {
-	region, excludeRegions, wordlist, keyword, numThreads, timeout, randomize, outputFile, verbose := parseCommandLineArguments()
+	cloudProvider, region, excludeRegions, wordlist, keyword, numThreads, timeout, randomize, outputFile, verbose := parseCommandLineArguments()
 
 	if wordlist == "" && keyword == "" {
 		fmt.Println("Usage: go run script.go [-wordlist=<your_keywords_file> | -keyword=<your_keyword>] [-threads=<num_threads>] [-timeout=<timeout_seconds>] [-randomize] [-output=<output_file>] [-verbose]")
@@ -77,27 +91,58 @@ func main() {
 		keywordList = []string{keyword}
 	}
 
-	resp, err := http.Get("https://ip-ranges.amazonaws.com/ip-ranges.json")
-	if err != nil {
-		log.Println("Error fetching IP ranges:", err)
+	var selectedIPRanges []string
+	if strings.Contains(cloudProvider, "aws") {
+		resp, err := http.Get("https://ip-ranges.amazonaws.com/ip-ranges.json")
+		if err != nil {
+			log.Println("Error fetching IP ranges:", err)
+			return
+		}
+		defer resp.Body.Close()
+
+		data, err := ioutil.ReadAll(resp.Body)
+		if err != nil {
+			log.Println("Error reading response body:", err)
+			return
+		}
+
+		var ipRanges IPRange
+		err = json.Unmarshal(data, &ipRanges)
+		if err != nil {
+			log.Println("Error parsing JSON:", err)
+			return
+		}
+
+		selectedIPRanges = filterAWSIPRanges(ipRanges, region, excludeRegions)
+	}
+	if strings.Contains(cloudProvider, "gcloud") {
+		resp, err := http.Get("https://www.gstatic.com/ipranges/cloud.json")
+		if err != nil {
+			log.Println("Error fetching IP ranges:", err)
+			return
+		}
+		defer resp.Body.Close()
+
+		data, err := ioutil.ReadAll(resp.Body)
+		if err != nil {
+			log.Println("Error reading response body:", err)
+			return
+		}
+
+		var ipRanges GCloudIPRange
+		err = json.Unmarshal(data, &ipRanges)
+		if err != nil {
+			log.Println("Error parsing JSON:", err)
+			return
+		}
+
+		selectedIPRanges = filterGCloudIPRanges(ipRanges, region, excludeRegions)
+	}
+
+	if selectedIPRanges == nil {
+		log.Println("Unknown cloud provider: ", cloudProvider)
 		return
 	}
-	defer resp.Body.Close()
-
-	data, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		log.Println("Error reading response body:", err)
-		return
-	}
-
-	var ipRanges IPRange
-	err = json.Unmarshal(data, &ipRanges)
-	if err != nil {
-		log.Println("Error parsing JSON:", err)
-		return
-	}
-
-	selectedIPRanges := filterIPRanges(ipRanges, region, excludeRegions)
 
 	if randomize {
 		rand.Seed(time.Now().UnixNano())
@@ -140,6 +185,7 @@ func main() {
 	}()
 
 	var output *os.File
+	var err error
 	if outputFile != "" {
 		output, err = os.Create(outputFile)
 		if err != nil {
@@ -160,7 +206,7 @@ func main() {
 	}
 }
 
-func filterIPRanges(ipRanges IPRange, region string, excludeRegions string) []string {
+func filterAWSIPRanges(ipRanges IPRange, region string, excludeRegions string) []string {
 	var selectedRanges []string
 
 	for _, ipRange := range ipRanges.Prefixes {
@@ -171,6 +217,20 @@ func filterIPRanges(ipRanges IPRange, region string, excludeRegions string) []st
 				if excludeRegions == "" || (!strings.Contains(excludeRegions, ipRange.Region) && !strings.Contains(ipRange.Region, excludeRegions)) {
 					selectedRanges = append(selectedRanges, ipRange.IPPrefix)
 				}
+			}
+		}
+	}
+
+	return selectedRanges
+}
+
+func filterGCloudIPRanges(ipRanges GCloudIPRange, region string, excludeRegions string) []string {
+	var selectedRanges []string
+
+	for _, ipRange := range ipRanges.Prefixes {
+		if region == "" || strings.Contains(region, ipRange.Region) || strings.Contains(ipRange.Region, region) {
+			if excludeRegions == "" || (!strings.Contains(excludeRegions, ipRange.Region) && !strings.Contains(ipRange.Region, excludeRegions)) {
+				selectedRanges = append(selectedRanges, ipRange.IPPrefix)
 			}
 		}
 	}
